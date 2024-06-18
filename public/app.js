@@ -1,7 +1,7 @@
 document.addEventListener("DOMContentLoaded", () => {
   let mediaRecorder;
   let audioChunks = [];
-  let storyIndex = 0;
+  let previousStory = "";
 
   const startButton = document.getElementById("start-recording");
   const stopButton = document.getElementById("stop-recording");
@@ -19,7 +19,7 @@ document.addEventListener("DOMContentLoaded", () => {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ userInput }),
+        body: JSON.stringify({ userInput, previousStory }),
       });
 
       if (!response.ok) {
@@ -32,6 +32,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const result = await response.json();
       addStoryPart(result.story, false);
       addChoices(result.choices);
+      previousStory += " " + result.story; // Append the new story part to the previous story
     } catch (error) {
       console.error("Error continuing the story:", error);
     }
@@ -40,7 +41,7 @@ document.addEventListener("DOMContentLoaded", () => {
   function addStoryPart(text, isUserInput) {
     const part = document.createElement("div");
     part.className = isUserInput ? "user-input" : "story-part";
-    part.textContent = text;
+    part.innerHTML = text.replace(/\n/g, "<br><br>"); // Replace newlines with paragraph breaks
     storyContainer.appendChild(part);
     storyContainer.scrollTop = storyContainer.scrollHeight;
   }
@@ -97,7 +98,7 @@ document.addEventListener("DOMContentLoaded", () => {
       startButton.disabled = true;
       stopButton.disabled = false; // Enable the "Finished" button when recording starts
     } else {
-      alert("Your browser does not support audio recording.");
+      console.error("Your browser does not support audio recording.");
     }
   });
 
@@ -107,11 +108,12 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   function startStory() {
-    addStoryPart(initialStoryParts[storyIndex], false);
+    addStoryPart(initialStoryParts[0], false);
+    previousStory = initialStoryParts[0]; // Initialize previous story
     addChoices([
-      "Luna could take her hoverboard to quickly navigate the surface.",
-      "Luna could use her digging tool to explore underground caves.",
-      "Luna could activate her drone to scout the area from above.",
+      "1. Luna could take her hoverboard to quickly navigate the surface.",
+      "2. Luna could use her digging tool to explore underground caves.",
+      "3. Luna could activate her drone to scout the area from above.",
     ]);
   }
 

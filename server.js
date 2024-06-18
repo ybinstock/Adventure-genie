@@ -12,7 +12,11 @@ const openai = new OpenAI({
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null, "uploads/");
+    const uploadPath = "uploads/";
+    if (!fs.existsSync(uploadPath)) {
+      fs.mkdirSync(uploadPath);
+    }
+    cb(null, uploadPath);
   },
   filename: (req, file, cb) => {
     const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
@@ -25,6 +29,10 @@ const upload = multer({ storage: storage });
 const app = express();
 app.use(bodyParser.json());
 app.use(express.static("public"));
+
+const countTokens = (text) => {
+  return text.split(" ").length;
+};
 
 app.post("/transcribe", upload.single("audio"), async (req, res) => {
   try {
@@ -47,8 +55,9 @@ app.post("/transcribe", upload.single("audio"), async (req, res) => {
 });
 
 app.post("/continue-story", async (req, res) => {
-  const { userInput } = req.body;
+  const { userInput, previousStory } = req.body;
   try {
+    // Get the continuation of the story without repeating the user input
     const response = await openai.chat.completions.create({
       model: "gpt-3.5-turbo",
       messages: [
@@ -59,7 +68,7 @@ app.post("/continue-story", async (req, res) => {
         },
         {
           role: "user",
-          content: `Continue the story. The user input was: "${userInput}"`,
+          content: `The current part of the story is: "${previousStory}". Continue the story after this input: "${userInput}". Do not repeat the user's input in the story.`,
         },
         {
           role: "assistant",
@@ -82,7 +91,7 @@ app.post("/continue-story", async (req, res) => {
         },
         {
           role: "user",
-          content: `Generate three relevant choices for the next part of the story based on the following continuation: "${storyText}"`,
+          content: `Generate three relevant choices for the next part of the story based on the following continuation: "${storyText}". Each choice must be 20 tokens or fewer.`,
         },
       ],
       max_tokens: 100,
@@ -91,10 +100,11 @@ app.post("/continue-story", async (req, res) => {
     const choices = choicesResponse.choices[0].message.content
       .split("\n")
       .filter((choice) => choice.trim() !== "")
+      .map((choice) => choice.replace(/^\d+\.\s*/, "").trim()) // Remove leading numbers and trim spaces
+      .filter((choice) => countTokens(choice) <= 20) // Ensure each choice is 20 tokens or fewer
       .slice(0, 3) // Take only the first three choices
-      .map((choice) => choice.replace(/^\d+\.\s*/, "")); // Remove leading numbers
+      .map((choice, index) => `${index + 1}. ${choice}`); // Add leading numbers
 
-    // Ensure a paragraph break before the choices
     storyText = storyText.trim() + "\n\n";
 
     res.json({ story: storyText, choices });
