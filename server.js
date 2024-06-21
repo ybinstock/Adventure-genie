@@ -34,9 +34,9 @@ const countTokens = (text) => {
   return text.split(" ").length;
 };
 
+// Endpoint to handle audio transcription
 app.post("/transcribe", upload.single("audio"), async (req, res) => {
   try {
-    console.log("File received:", req.file);
     if (!req.file) {
       return res.status(400).json({ error: "No file uploaded" });
     }
@@ -54,10 +54,16 @@ app.post("/transcribe", upload.single("audio"), async (req, res) => {
   }
 });
 
+// Endpoint to continue the story based on user input
 app.post("/continue-story", async (req, res) => {
-  const { userInput, previousStory } = req.body;
+  const { userInput, previousStory, inputCount } = req.body;
   try {
-    // Get the continuation of the story without repeating the user input
+    const storyPrompt = `${previousStory}\n\nThe user input is: "${userInput}".\n\nPlease continue the story based on the user's input, but do not include the user input in the story. ${
+      inputCount < 5
+        ? "End the story with a sentence prompting the reader to make a decision."
+        : "Conclude the story."
+    }`;
+
     const response = await openai.chat.completions.create({
       model: "gpt-3.5-turbo",
       messages: [
@@ -66,44 +72,38 @@ app.post("/continue-story", async (req, res) => {
           content:
             "You are a creative AI that helps continue a sci-fi adventure story for a 10-year-old girl.",
         },
-        {
-          role: "user",
-          content: `The current part of the story is: "${previousStory}". Continue the story after this input: "${userInput}". Do not repeat the user's input in the story.`,
-        },
-        {
-          role: "assistant",
-          content:
-            "Please provide a continuation of the story. End the story with a sentence prompting the reader to make a decision.",
-        },
+        { role: "user", content: storyPrompt },
       ],
       max_tokens: 300,
     });
 
     let storyText = response.choices[0].message.content;
 
-    const choicesResponse = await openai.chat.completions.create({
-      model: "gpt-3.5-turbo",
-      messages: [
-        {
-          role: "system",
-          content:
-            "You are a creative AI that helps continue a sci-fi adventure story for a 10-year-old girl.",
-        },
-        {
-          role: "user",
-          content: `Generate three relevant choices for the next part of the story based on the following continuation: "${storyText}". Each choice must be 20 tokens or fewer.`,
-        },
-      ],
-      max_tokens: 100,
-    });
+    let choices = [];
+    if (inputCount < 5) {
+      const choicesPrompt = `Based on the following continuation, generate three relevant choices for the next part of the story. Each choice must be 20 tokens or fewer:\n\n${storyText}`;
 
-    const choices = choicesResponse.choices[0].message.content
-      .split("\n")
-      .filter((choice) => choice.trim() !== "")
-      .map((choice) => choice.replace(/^\d+\.\s*/, "").trim()) // Remove leading numbers and trim spaces
-      .filter((choice) => countTokens(choice) <= 20) // Ensure each choice is 20 tokens or fewer
-      .slice(0, 3) // Take only the first three choices
-      .map((choice, index) => `${index + 1}. ${choice}`); // Add leading numbers
+      const choicesResponse = await openai.chat.completions.create({
+        model: "gpt-3.5-turbo",
+        messages: [
+          {
+            role: "system",
+            content:
+              "You are a creative AI that helps continue a sci-fi adventure story for a 10-year-old girl.",
+          },
+          { role: "user", content: choicesPrompt },
+        ],
+        max_tokens: 100,
+      });
+
+      choices = choicesResponse.choices[0].message.content
+        .split("\n")
+        .filter((choice) => choice.trim() !== "")
+        .map((choice) => choice.replace(/^\d+\.\s*/, "").trim()) // Remove leading numbers and trim spaces
+        .filter((choice) => countTokens(choice) <= 20) // Ensure each choice is 20 tokens or fewer
+        .slice(0, 3) // Take only the first three choices
+        .map((choice, index) => `${index + 1}. ${choice}`); // Add leading numbers
+    }
 
     storyText = storyText.trim() + "\n\n";
 

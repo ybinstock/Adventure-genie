@@ -1,7 +1,11 @@
+console.log("version 0.1.5");
+
 document.addEventListener("DOMContentLoaded", () => {
   let mediaRecorder;
   let audioChunks = [];
   let previousStory = "";
+  let previousInputs = []; // Array to store all previous user inputs
+  let inputCount = 0; // Track the number of user inputs
 
   const startButton = document.getElementById("start-recording");
   const stopButton = document.getElementById("stop-recording");
@@ -12,14 +16,32 @@ document.addEventListener("DOMContentLoaded", () => {
     `As Luna landed on Planet X, her ship's sensors picked up strange signals from deep within the planet's core. She knew she had to investigate, but how? Luna could take her hoverboard to quickly navigate the surface, use her digging tool to explore underground caves, or activate her drone to scout the area from above. Each option held the promise of a new adventure, and Luna had to choose wisely.`,
   ];
 
+  // Function to clean the user input by checking for repetition against all previous inputs
+  function cleanUserInput(userInput) {
+    let cleanInput = userInput.trim();
+    previousInputs.forEach((input) => {
+      if (cleanInput.toLowerCase().includes(input.toLowerCase())) {
+        cleanInput = cleanInput.replace(new RegExp(input, "i"), "").trim();
+      }
+    });
+    return cleanInput;
+  }
+
+  // Function to fetch story continuation from the server
   async function fetchStoryContinuation(userInput) {
     try {
+      const cleanedInput = cleanUserInput(userInput);
+
       const response = await fetch("/continue-story", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ userInput, previousStory }),
+        body: JSON.stringify({
+          userInput: cleanedInput,
+          previousStory,
+          inputCount,
+        }),
       });
 
       if (!response.ok) {
@@ -32,12 +54,19 @@ document.addEventListener("DOMContentLoaded", () => {
       const result = await response.json();
       addStoryPart(result.story, false);
       addChoices(result.choices);
-      previousStory += " " + result.story; // Append the new story part to the previous story
+      previousStory += " " + result.story.trim(); // Append only the AI-generated part to the previous story
+      previousInputs.push(cleanedInput); // Store the cleaned user input
+      inputCount++; // Increment the input count
+
+      if (inputCount >= 5) {
+        startButton.disabled = true; // Disable the "What happens next?" button after the fifth user input
+      }
     } catch (error) {
       console.error("Error continuing the story:", error);
     }
   }
 
+  // Function to add a part of the story to the DOM
   function addStoryPart(text, isUserInput) {
     const part = document.createElement("div");
     part.className = isUserInput ? "user-input" : "story-part";
@@ -46,6 +75,7 @@ document.addEventListener("DOMContentLoaded", () => {
     storyContainer.scrollTop = storyContainer.scrollHeight;
   }
 
+  // Function to add choices to the DOM
   function addChoices(choices) {
     const choicesDiv = document.createElement("div");
     choicesDiv.className = "choices";
@@ -59,6 +89,7 @@ document.addEventListener("DOMContentLoaded", () => {
     startButton.disabled = false; // Enable the "What happens next?" button when choices are presented
   }
 
+  // Event listener for the start recording button
   startButton.addEventListener("click", async () => {
     if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -87,8 +118,9 @@ document.addEventListener("DOMContentLoaded", () => {
           }
 
           const result = await response.json();
-          addStoryPart(result.transcription, true);
-          await fetchStoryContinuation(result.transcription);
+          const cleanedInput = cleanUserInput(result.transcription);
+          addStoryPart(cleanedInput, true); // Add the cleaned user input to the story
+          await fetchStoryContinuation(cleanedInput);
         } catch (error) {
           console.error("There was a problem with the fetch operation:", error);
         }
@@ -102,11 +134,13 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
+  // Event listener for the stop recording button
   stopButton.addEventListener("click", () => {
     mediaRecorder.stop();
     stopButton.disabled = true; // Disable the "Finished" button after stopping the recording
   });
 
+  // Function to start the initial story
   function startStory() {
     addStoryPart(initialStoryParts[0], false);
     previousStory = initialStoryParts[0]; // Initialize previous story
