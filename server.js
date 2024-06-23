@@ -57,11 +57,13 @@ app.post("/transcribe", upload.single("audio"), async (req, res) => {
 // Endpoint to continue the story based on user input
 app.post("/continue-story", async (req, res) => {
   const { userInput, previousStory, inputCount } = req.body;
+  console.log(`Input Count: ${inputCount}`);
+  console.log(`User Input (server-side): ${userInput}`);
   try {
-    const storyPrompt = `${previousStory}\n\nThe user input is: "${userInput}".\n\nPlease continue the story based on the user's input, but do not include the user input in the story. ${
+    const storyPrompt = `${previousStory}\n\nThe user input is: "${userInput}".\n\nPlease continue the story based on the user's input ${
       inputCount < 5
-        ? "End the story with a sentence prompting the reader to make a decision."
-        : "Conclude the story."
+        ? "End the current segment with a sentence prompting the reader to make a decision."
+        : "Conclude the story in a dramatic conclusion."
     }`;
 
     const response = await openai.chat.completions.create({
@@ -106,6 +108,8 @@ app.post("/continue-story", async (req, res) => {
     }
 
     storyText = storyText.trim() + "\n\n";
+    // console.log(`Generated Story: ${storyText}`);
+    // console.log(`Generated Choices: ${choices}`);
 
     res.json({ story: storyText, choices });
   } catch (error) {

@@ -1,4 +1,4 @@
-console.log("version 0.1.5");
+console.log("version 0.2.2");
 
 document.addEventListener("DOMContentLoaded", () => {
   let mediaRecorder;
@@ -19,11 +19,23 @@ document.addEventListener("DOMContentLoaded", () => {
   // Function to clean the user input by checking for repetition against all previous inputs
   function cleanUserInput(userInput) {
     let cleanInput = userInput.trim();
-    previousInputs.forEach((input) => {
-      if (cleanInput.toLowerCase().includes(input.toLowerCase())) {
-        cleanInput = cleanInput.replace(new RegExp(input, "i"), "").trim();
+    console.log("Initial userInput:", cleanInput);
+
+    previousInputs.forEach((input, index) => {
+      const escapedInput = input.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); // Escape special characters for regex
+      const regex = new RegExp(escapedInput, "gi"); // Removed word boundaries
+      console.log(`Regex for previous input ${index + 1}:`, regex);
+
+      if (regex.test(cleanInput)) {
+        cleanInput = cleanInput.replace(regex, "").trim();
+        console.log(
+          `Cleaning user input at iteration ${index + 1}:`,
+          cleanInput
+        );
       }
     });
+
+    console.log("Final cleaned input:", cleanInput);
     return cleanInput;
   }
 
@@ -31,6 +43,10 @@ document.addEventListener("DOMContentLoaded", () => {
   async function fetchStoryContinuation(userInput) {
     try {
       const cleanedInput = cleanUserInput(userInput);
+      console.log(
+        "User cleanedInput Input for Continuation (client-side):",
+        cleanedInput
+      );
 
       const response = await fetch("/continue-story", {
         method: "POST",
@@ -53,14 +69,14 @@ document.addEventListener("DOMContentLoaded", () => {
 
       const result = await response.json();
       addStoryPart(result.story, false);
-      addChoices(result.choices);
+      if (result.choices.length === 0) {
+        startButton.disabled = true; // Disable the button when the story concludes
+      } else {
+        addChoices(result.choices);
+      }
       previousStory += " " + result.story.trim(); // Append only the AI-generated part to the previous story
       previousInputs.push(cleanedInput); // Store the cleaned user input
       inputCount++; // Increment the input count
-
-      if (inputCount >= 5) {
-        startButton.disabled = true; // Disable the "What happens next?" button after the fifth user input
-      }
     } catch (error) {
       console.error("Error continuing the story:", error);
     }
@@ -119,6 +135,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
           const result = await response.json();
           const cleanedInput = cleanUserInput(result.transcription);
+          console.log(
+            "User Transcription (client-side):",
+            result.transcription
+          );
+          console.log("Cleaned User Input (client-side):", cleanedInput);
           addStoryPart(cleanedInput, true); // Add the cleaned user input to the story
           await fetchStoryContinuation(cleanedInput);
         } catch (error) {
