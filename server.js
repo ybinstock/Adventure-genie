@@ -61,7 +61,7 @@ app.post("/continue-story", async (req, res) => {
   console.log(`User Input (server-side): ${userInput}`);
   try {
     const storyPrompt = `${previousStory}\n\nThe user input is: "${userInput}".\n\nPlease continue the story based on the user's input ${
-      inputCount < 5
+      inputCount < 2
         ? "End the current segment with a sentence prompting the reader to make a decision."
         : "Conclude the story in a dramatic conclusion."
     }`;
@@ -76,13 +76,13 @@ app.post("/continue-story", async (req, res) => {
         },
         { role: "user", content: storyPrompt },
       ],
-      max_tokens: 300,
+      max_tokens: 500,
     });
 
     let storyText = response.choices[0].message.content;
 
     let choices = [];
-    if (inputCount < 5) {
+    if (inputCount < 2) {
       const choicesPrompt = `Based on the following continuation, generate three relevant choices for the next part of the story. Each choice must be 20 tokens or fewer:\n\n${storyText}`;
 
       const choicesResponse = await openai.chat.completions.create({
@@ -95,7 +95,7 @@ app.post("/continue-story", async (req, res) => {
           },
           { role: "user", content: choicesPrompt },
         ],
-        max_tokens: 100,
+        max_tokens: 300,
       });
 
       choices = choicesResponse.choices[0].message.content
@@ -108,9 +108,6 @@ app.post("/continue-story", async (req, res) => {
     }
 
     storyText = storyText.trim() + "\n\n";
-    // console.log(`Generated Story: ${storyText}`);
-    // console.log(`Generated Choices: ${choices}`);
-
     res.json({ story: storyText, choices });
   } catch (error) {
     console.error("Error generating story:", error.message);

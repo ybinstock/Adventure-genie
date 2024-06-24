@@ -1,5 +1,3 @@
-console.log("version 0.2.2");
-
 document.addEventListener("DOMContentLoaded", () => {
   let mediaRecorder;
   let audioChunks = [];
@@ -19,23 +17,17 @@ document.addEventListener("DOMContentLoaded", () => {
   // Function to clean the user input by checking for repetition against all previous inputs
   function cleanUserInput(userInput) {
     let cleanInput = userInput.trim();
-    console.log("Initial userInput:", cleanInput);
-
     previousInputs.forEach((input, index) => {
       const escapedInput = input.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); // Escape special characters for regex
-      const regex = new RegExp(escapedInput, "gi"); // Removed word boundaries
-      console.log(`Regex for previous input ${index + 1}:`, regex);
+      const regex = new RegExp(`(^|\\s)${escapedInput}(?=$|[.,!?\\s]|$)`, "gi"); // Handle spaces, punctuation, and line ends
 
       if (regex.test(cleanInput)) {
         cleanInput = cleanInput.replace(regex, "").trim();
-        console.log(
-          `Cleaning user input at iteration ${index + 1}:`,
-          cleanInput
-        );
       }
     });
 
-    console.log("Final cleaned input:", cleanInput);
+    // Remove any leading or trailing punctuation left over after cleaning
+    cleanInput = cleanInput.replace(/^[.,!?]+|[.,!?]+$/g, "").trim();
     return cleanInput;
   }
 
@@ -43,10 +35,6 @@ document.addEventListener("DOMContentLoaded", () => {
   async function fetchStoryContinuation(userInput) {
     try {
       const cleanedInput = cleanUserInput(userInput);
-      console.log(
-        "User cleanedInput Input for Continuation (client-side):",
-        cleanedInput
-      );
 
       const response = await fetch("/continue-story", {
         method: "POST",
@@ -139,7 +127,6 @@ document.addEventListener("DOMContentLoaded", () => {
             "User Transcription (client-side):",
             result.transcription
           );
-          console.log("Cleaned User Input (client-side):", cleanedInput);
           addStoryPart(cleanedInput, true); // Add the cleaned user input to the story
           await fetchStoryContinuation(cleanedInput);
         } catch (error) {
