@@ -10,8 +10,66 @@
   <div class="container">
     <header>
       <h1>Adventure Genie</h1>
+      <p>Create magical bedtime stories for your child with customized settings.</p>
     </header>
     <main>
+      <form id="storyForm">
+        <div class="form-group">
+          <label for="genre">Genre:</label>
+          <select id="genre" name="genre">
+            <option value="fantasy">Fantasy</option>
+            <option value="sci-fi">Sci-Fi</option>
+            <option value="mystery">Mystery</option>
+            <option value="historical-fiction">Historical Fiction</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="childGender">Child Gender:</label>
+          <select id="childGender" name="childGender">
+            <option value="girl">Girl</option>
+            <option value="boy">Boy</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="theme">Theme:</label>
+          <select id="theme" name="theme">
+            <option value="friendship">Friendship</option>
+            <option value="bravery">Bravery</option>
+            <option value="kindness">Kindness</option>
+            <option value="teamwork">Teamwork</option>
+            <option value="courage">Courage</option>
+            <option value="curiosity">Curiosity</option>
+            <option value="empathy">Empathy</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="age">Age:</label>
+          <select id="age" name="age">
+            <option value="1">1</option>
+            <option value="2">2</option>
+            <option value="3">3</option>
+            <option value="4">4</option>
+            <option value="5">5</option>
+            <option value="6">6</option>
+            <option value="7">7</option>
+            <option value="8">8</option>
+            <option value="9">9</option>
+            <option value="10">10</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="artStyle">Art Style:</label>
+          <select id="artStyle" name="artStyle">
+            <option value="storybook">Storybook Illustration</option>
+            <option value="crayon">Hand-Drawn Crayon</option>
+            <option value="chibi">Chibi Style</option>
+          </select>
+        </div>
+        <button type="submit">Create Story</button>
+      </form>
+      <div id="loading" style="display: none;">Loading...</div>
+      <div id="storyOutput"></div>
+      <div id="audioOutput"></div>
       <div id="story-container">
         <!-- Story parts will be appended here -->
       </div>
@@ -19,6 +77,66 @@
       <button id="stop-recording" disabled>Finished</button>
     </main>
   </div>
-  <script src="app.js"></script>
+  <script>
+    document.getElementById('storyForm').addEventListener('submit', async function(event) {
+      event.preventDefault();
+  
+      const genre = document.getElementById('genre').value;
+      const childGender = document.getElementById('childGender').value;
+      const theme = document.getElementById('theme').value;
+      const age = document.getElementById('age').value;
+      const artStyle = document.getElementById('artStyle').value;
+  
+      document.getElementById('loading').style.display = 'block';
+      document.getElementById('storyOutput').innerHTML = '';
+      document.getElementById('audioOutput').innerHTML = '';
+  
+      console.log('Form submitted. Generating story...');
+      const response = await fetch('/generate-story', {  // Corrected endpoint
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ genre, childGender, theme, age, artStyle }),
+      });
+  
+      if (response.ok) {
+        const data = await response.json();
+        console.log('Received data:', data);
+        if (!data.story || !data.image || !data.audioUrl) {
+          console.error('Missing data in response:', data);
+          document.getElementById('loading').style.display = 'none';
+          return;
+        }
+  
+        console.log('Story generated:', data.story);
+  
+        const storyOutput = document.getElementById('storyOutput');
+        storyOutput.innerHTML = '';
+        const storyPart = document.createElement('p');
+        storyPart.innerText = data.story;
+        storyOutput.appendChild(storyPart);
+  
+        console.log(`Image generated: ${data.image}`);
+        const img = document.createElement('img');
+        img.src = `/${data.image}`;
+        img.alt = 'Story Image';
+        img.style.width = '100%';
+        storyOutput.appendChild(img);
+  
+        console.log('Audio generated:', data.audioUrl);
+        const audioOutput = document.getElementById('audioOutput');
+        const audio = document.createElement('audio');
+        audio.controls = true;
+        audio.src = `/${data.audioUrl}`;
+        audioOutput.appendChild(audio);
+  
+        document.getElementById('loading').style.display = 'none';
+      } else {
+        console.error('Error generating story:', response.statusText);
+        document.getElementById('loading').style.display = 'none';
+      }
+    });
+  </script>
 </body>
 </html>

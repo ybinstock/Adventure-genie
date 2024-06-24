@@ -1,163 +1,159 @@
-document.addEventListener("DOMContentLoaded", () => {
-  let mediaRecorder;
-  let audioChunks = [];
-  let previousStory = "";
-  let previousInputs = []; // Array to store all previous user inputs
-  let inputCount = 0; // Track the number of user inputs
+require("dotenv").config();
+const express = require("express");
+const bodyParser = require("body-parser");
+const OpenAI = require("openai");
+const fs = require("fs");
+const path = require("path");
+const axios = require("axios");
 
-  const startButton = document.getElementById("start-recording");
-  const stopButton = document.getElementById("stop-recording");
-  const storyContainer = document.getElementById("story-container");
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
 
-  const initialStoryParts = [
-    `In a distant future, in a galaxy far away, a 10-year-old girl named Luna was preparing for her first solo space adventure. Luna had always dreamt of exploring the unknown, and today, her dream was coming true. She was equipped with a state-of-the-art space suit and a tiny, but incredibly advanced, spaceship named StarWing. Luna's mission was to explore the mysterious Planet X, a world filled with secrets and adventures waiting to be discovered.`,
-    `As Luna landed on Planet X, her ship's sensors picked up strange signals from deep within the planet's core. She knew she had to investigate, but how? Luna could take her hoverboard to quickly navigate the surface, use her digging tool to explore underground caves, or activate her drone to scout the area from above. Each option held the promise of a new adventure, and Luna had to choose wisely.`,
-  ];
+const app = express();
+app.use(bodyParser.json());
+app.use(express.static("public"));
 
-  // Function to clean the user input by checking for repetition against all previous inputs
-  function cleanUserInput(userInput) {
-    let cleanInput = userInput.trim();
-    previousInputs.forEach((input, index) => {
-      const escapedInput = input.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); // Escape special characters for regex
-      const regex = new RegExp(`(^|\\s)${escapedInput}(?=$|[.,!?\\s]|$)`, "gi"); // Handle spaces, punctuation, and line ends
+// Endpoint to generate initial story
+app.post("/generate-story", async (req, res) => {
+  const { genre, name } = req.body;
 
-      if (regex.test(cleanInput)) {
-        cleanInput = cleanInput.replace(regex, "").trim();
-      }
+  const prompt = `Create a bedtime story in the ${genre} genre, featuring a child named ${name}.`;
+
+  try {
+    const response = await openai.completions.create({
+      model: "text-davinci-003",
+      prompt: prompt,
+      max_tokens: 500,
     });
 
-    // Remove any leading or trailing punctuation left over after cleaning
-    cleanInput = cleanInput.replace(/^[.,!?]+|[.,!?]+$/g, "").trim();
-    return cleanInput;
+    const story = response.choices[0].text.trim();
+
+    // Generate image using DALL-E
+    const imageResponse = await openai.images.generate({
+      prompt: `A scene from a ${genre} story featuring a child named ${name}`,
+      n: 1,
+      size: "512x512",
+    });
+    const imageUrl = imageResponse.data[0].url;
+
+    // Generate audio narration
+    const audioResponse = await axios.post(
+      "https://api.some-audio-service.com/generate",
+      { text: story }
+    );
+    const audioUrl = audioResponse.data.url;
+
+    res.json({ story, imageUrl, audioUrl });
+  } catch (error) {
+    console.error("Error generating story:", error.message);
+    res.status(500).json({ error: "Error generating story" });
   }
+});
 
-  // Function to fetch story continuation from the server
-  async function fetchStoryContinuation(userInput) {
-    try {
-      const cleanedInput = cleanUserInput(userInput);
+// Existing Adventure Genie code for continuing the story
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const uploadPath = "uploads/";
+    if (!fs.existsSync(uploadPath)) {
+      fs.mkdirSync(uploadPath);
+    }
+    cb(null, uploadPath);
+  },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
+    cb(null, file.fieldname + "-" + uniqueSuffix + ".webm");
+  },
+});
 
-      const response = await fetch("/continue-story", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
+const upload = multer({ storage: storage });
+
+const countTokens = (text) => {
+  return text.split(" ").length;
+};
+
+// Endpoint to handle audio transcription
+app.post("/transcribe", upload.single("audio"), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: "No file uploaded" });
+    }
+
+    const transcription = await openai.audio.transcriptions.create({
+      file: fs.createReadStream(req.file.path),
+      model: "whisper-1",
+    });
+
+    fs.unlinkSync(req.file.path);
+    res.json({ transcription: transcription.text });
+  } catch (error) {
+    console.error("Error transcribing audio:", error.message);
+    res.status(500).json({ error: "Error transcribing audio" });
+  }
+});
+
+// Endpoint to continue the story based on user input
+app.post("/continue-story", async (req, res) => {
+  const { userInput, previousStory, inputCount } = req.body;
+  console.log(`Input Count: ${inputCount}`);
+  console.log(`User Input (server-side): ${userInput}`);
+  try {
+    const storyPrompt = `${previousStory}\n\nThe user input is: "${userInput}".\n\nPlease continue the story based on the user's input ${
+      inputCount < 2
+        ? "End the current segment with a sentence prompting the reader to make a decision."
+        : "Conclude the story in a dramatic conclusion."
+    }`;
+
+    const response = await openai.chat.completions.create({
+      model: "gpt-3.5-turbo",
+      messages: [
+        {
+          role: "system",
+          content:
+            "You are a creative AI that helps continue a sci-fi adventure story for a 10-year-old girl.",
         },
-        body: JSON.stringify({
-          userInput: cleanedInput,
-          previousStory,
-          inputCount,
-        }),
+        { role: "user", content: storyPrompt },
+      ],
+      max_tokens: 300,
+    });
+
+    let storyText = response.choices[0].message.content;
+
+    let choices = [];
+    if (inputCount < 2) {
+      const choicesPrompt = `Based on the following continuation, generate three relevant choices for the next part of the story. Each choice must be 20 tokens or fewer:\n\n${storyText}`;
+
+      const choicesResponse = await openai.chat.completions.create({
+        model: "gpt-3.5-turbo",
+        messages: [
+          {
+            role: "system",
+            content:
+              "You are a creative AI that helps continue a sci-fi adventure story for a 10-year-old girl.",
+          },
+          { role: "user", content: choicesPrompt },
+        ],
+        max_tokens: 100,
       });
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(
-          `Network response was not ok: ${response.statusText} - ${errorText}`
-        );
-      }
-
-      const result = await response.json();
-      addStoryPart(result.story, false);
-      if (result.choices.length === 0) {
-        startButton.disabled = true; // Disable the button when the story concludes
-      } else {
-        addChoices(result.choices);
-      }
-      previousStory += " " + result.story.trim(); // Append only the AI-generated part to the previous story
-      previousInputs.push(cleanedInput); // Store the cleaned user input
-      inputCount++; // Increment the input count
-    } catch (error) {
-      console.error("Error continuing the story:", error);
+      choices = choicesResponse.choices[0].message.content
+        .split("\n")
+        .filter((choice) => choice.trim() !== "")
+        .map((choice) => choice.replace(/^\d+\.\s*/, "").trim()) // Remove leading numbers and trim spaces
+        .filter((choice) => countTokens(choice) <= 20) // Ensure each choice is 20 tokens or fewer
+        .slice(0, 3) // Take only the first three choices
+        .map((choice, index) => `${index + 1}. ${choice}`); // Add leading numbers
     }
+
+    storyText = storyText.trim() + "\n\n";
+    res.json({ story: storyText, choices });
+  } catch (error) {
+    console.error("Error generating story:", error.message);
+    res.status(500).json({ error: "Error generating story" });
   }
+});
 
-  // Function to add a part of the story to the DOM
-  function addStoryPart(text, isUserInput) {
-    const part = document.createElement("div");
-    part.className = isUserInput ? "user-input" : "story-part";
-    part.innerHTML = text.replace(/\n/g, "<br><br>"); // Replace newlines with paragraph breaks
-    storyContainer.appendChild(part);
-    storyContainer.scrollTop = storyContainer.scrollHeight;
-  }
-
-  // Function to add choices to the DOM
-  function addChoices(choices) {
-    const choicesDiv = document.createElement("div");
-    choicesDiv.className = "choices";
-    choices.forEach((choice) => {
-      const choiceP = document.createElement("p");
-      choiceP.textContent = choice;
-      choicesDiv.appendChild(choiceP);
-    });
-    storyContainer.appendChild(choicesDiv);
-    storyContainer.scrollTop = storyContainer.scrollHeight;
-    startButton.disabled = false; // Enable the "What happens next?" button when choices are presented
-  }
-
-  // Event listener for the start recording button
-  startButton.addEventListener("click", async () => {
-    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      mediaRecorder = new MediaRecorder(stream);
-
-      mediaRecorder.ondataavailable = (event) => {
-        audioChunks.push(event.data);
-      };
-
-      mediaRecorder.onstop = async () => {
-        const audioBlob = new Blob(audioChunks, { type: "audio/webm" });
-        const formData = new FormData();
-        formData.append("audio", audioBlob, "audio.webm");
-
-        try {
-          const response = await fetch("/transcribe", {
-            method: "POST",
-            body: formData,
-          });
-
-          if (!response.ok) {
-            const errorText = await response.text();
-            throw new Error(
-              `Network response was not ok: ${response.statusText} - ${errorText}`
-            );
-          }
-
-          const result = await response.json();
-          const cleanedInput = cleanUserInput(result.transcription);
-          console.log(
-            "User Transcription (client-side):",
-            result.transcription
-          );
-          addStoryPart(cleanedInput, true); // Add the cleaned user input to the story
-          await fetchStoryContinuation(cleanedInput);
-        } catch (error) {
-          console.error("There was a problem with the fetch operation:", error);
-        }
-      };
-
-      mediaRecorder.start();
-      startButton.disabled = true;
-      stopButton.disabled = false; // Enable the "Finished" button when recording starts
-    } else {
-      console.error("Your browser does not support audio recording.");
-    }
-  });
-
-  // Event listener for the stop recording button
-  stopButton.addEventListener("click", () => {
-    mediaRecorder.stop();
-    stopButton.disabled = true; // Disable the "Finished" button after stopping the recording
-  });
-
-  // Function to start the initial story
-  function startStory() {
-    addStoryPart(initialStoryParts[0], false);
-    previousStory = initialStoryParts[0]; // Initialize previous story
-    addChoices([
-      "1. Luna could take her hoverboard to quickly navigate the surface.",
-      "2. Luna could use her digging tool to explore underground caves.",
-      "3. Luna could activate her drone to scout the area from above.",
-    ]);
-  }
-
-  startStory();
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`Server is running on port ${PORT}`);
 });
