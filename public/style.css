@@ -1,84 +1,85 @@
 body {
   font-family: Arial, sans-serif;
+  text-align: center;
   margin: 0;
   padding: 0;
-  background-color: #f9f9f9;
+  background-color: #f0f0f0;
 }
 
 .container {
-  width: 100%;
-  max-width: 800px;
-  margin: 0 auto;
+  width: 80%;
+  margin: auto;
   padding: 20px;
-  box-sizing: border-box;
-  background-color: white;
+  background: white;
+  border-radius: 8px;
   box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
 }
 
 header {
-  text-align: center;
   margin-bottom: 20px;
 }
 
-header h1 {
-  margin: 0;
-  font-size: 2em;
-  color: #333;
+main {
+  text-align: left;
 }
 
-header p {
-  margin: 10px 0 0;
-  color: #777;
-}
-
-form {
-  margin-bottom: 20px;
+#story-container {
+  padding: 20px;
+  background: #fafafa;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  margin-top: 20px;
 }
 
 .form-group {
   margin-bottom: 15px;
 }
 
-.form-group label {
+label {
   display: block;
   margin-bottom: 5px;
-  color: #333;
 }
 
-.form-group input {
-  width: 100%;
-  padding: 8px;
-  box-sizing: border-box;
-}
-
-#story-container {
-  text-align: left;
-  font-family: 'Courier New', Courier, monospace;
-  padding: 20px;
-  background: #fafafa;
-  border: 1px solid #ddd;
-  border-radius: 8px;
-  margin-bottom: 20px;
-  height: 400px;
-  overflow-y: auto;
-}
-
-.story-part {
-  margin-bottom: 10px;
-}
-
-.user-input {
-  color: blue;
-  font-style: italic;
-}
-
+select,
 button {
-  margin: 10px;
-  padding: 10px 20px;
+  width: 100%;
+  padding: 10px;
+  margin-top: 5px;
   font-size: 16px;
 }
 
-.choices p {
-  margin: 0;
-  padding: 5px 0;
+button {
+  background-color: #007bff;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.3s;
+}
+
+button:hover {
+  background-color: #0056b3;
+}
+
+button:disabled {
+  background-color: #ccc;
+  cursor: not-allowed;
+}
+
+.story-part {
+  margin-bottom: 20px;
+}
+
+.story-part img {
+  margin-top: 10px;
+}
+
+.choices {
+  margin-top: 10px;
+}
+
+@media (max-width: 600px) {
+  .container {
+    width: 95%;
+  }
 }

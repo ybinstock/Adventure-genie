@@ -12,7 +12,7 @@
       <h1>Adventure Genie</h1>
       <p>Create magical bedtime stories for your child with customized settings.</p>
     </header>
-    <main>
+    <main id="main">
       <form id="storyForm">
         <div class="form-group">
           <label for="genre">Genre:</label>
@@ -65,78 +65,11 @@
             <option value="chibi">Chibi Style</option>
           </select>
         </div>
-        <button type="submit">Create Story</button>
+        <button type="submit" id="mainActionButton">Create Story</button>
       </form>
-      <div id="loading" style="display: none;">Loading...</div>
-      <div id="storyOutput"></div>
-      <div id="audioOutput"></div>
-      <div id="story-container">
-        <!-- Story parts will be appended here -->
-      </div>
-      <button id="start-recording" disabled>What happens next?</button>
-      <button id="stop-recording" disabled>Finished</button>
+      <div id="story-container"></div>
     </main>
   </div>
-  <script>
-    document.getElementById('storyForm').addEventListener('submit', async function(event) {
-      event.preventDefault();
-  
-      const genre = document.getElementById('genre').value;
-      const childGender = document.getElementById('childGender').value;
-      const theme = document.getElementById('theme').value;
-      const age = document.getElementById('age').value;
-      const artStyle = document.getElementById('artStyle').value;
-  
-      document.getElementById('loading').style.display = 'block';
-      document.getElementById('storyOutput').innerHTML = '';
-      document.getElementById('audioOutput').innerHTML = '';
-  
-      console.log('Form submitted. Generating story...');
-      const response = await fetch('/generate-story', {  // Corrected endpoint
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ genre, childGender, theme, age, artStyle }),
-      });
-  
-      if (response.ok) {
-        const data = await response.json();
-        console.log('Received data:', data);
-        if (!data.story || !data.image || !data.audioUrl) {
-          console.error('Missing data in response:', data);
-          document.getElementById('loading').style.display = 'none';
-          return;
-        }
-  
-        console.log('Story generated:', data.story);
-  
-        const storyOutput = document.getElementById('storyOutput');
-        storyOutput.innerHTML = '';
-        const storyPart = document.createElement('p');
-        storyPart.innerText = data.story;
-        storyOutput.appendChild(storyPart);
-  
-        console.log(`Image generated: ${data.image}`);
-        const img = document.createElement('img');
-        img.src = `/${data.image}`;
-        img.alt = 'Story Image';
-        img.style.width = '100%';
-        storyOutput.appendChild(img);
-  
-        console.log('Audio generated:', data.audioUrl);
-        const audioOutput = document.getElementById('audioOutput');
-        const audio = document.createElement('audio');
-        audio.controls = true;
-        audio.src = `/${data.audioUrl}`;
-        audioOutput.appendChild(audio);
-  
-        document.getElementById('loading').style.display = 'none';
-      } else {
-        console.error('Error generating story:', response.statusText);
-        document.getElementById('loading').style.display = 'none';
-      }
-    });
-  </script>
+  <script src="app.js"></script>
 </body>
 </html>
