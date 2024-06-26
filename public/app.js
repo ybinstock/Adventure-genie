@@ -16,11 +16,12 @@ document.addEventListener("DOMContentLoaded", () => {
     const childGender = document.getElementById("childGender").value;
     const theme = document.getElementById("theme").value;
     const age = document.getElementById("age").value;
+    const artStyle = document.getElementById("artStyle").value;
 
-    mainActionButton.innerText = "Loading...";
-    mainActionButton.disabled = true;
+    loadingDiv.style.display = "block";
     storyContainer.innerHTML = "";
     document.getElementById("audioOutput").innerHTML = "";
+    mainActionButton.style.display = "none"; // Hide the main action button
 
     try {
       const response = await fetch("/generate-story", {
@@ -28,32 +29,25 @@ document.addEventListener("DOMContentLoaded", () => {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ genre, childGender, theme, age }),
+        body: JSON.stringify({ genre, childGender, theme, age, artStyle }),
       });
 
       if (response.ok) {
         const data = await response.json();
         displayStoryPart(data.story, data.image, data.audioUrl);
         addChoices(data.choices);
-        mainActionButton.innerText = "What happens next?";
-        mainActionButton.disabled = false;
+        createNextButton();
       } else {
         console.error("Error generating story:", response.statusText);
       }
     } catch (error) {
       console.error("Error generating story:", error);
+    } finally {
+      loadingDiv.style.display = "none";
     }
   });
 
-  mainActionButton.addEventListener("click", async () => {
-    if (mainActionButton.innerText === "What happens next?") {
-      startRecording();
-    } else if (mainActionButton.innerText === "Finished") {
-      stopRecording();
-    }
-  });
-
-  function startRecording() {
+  function startRecording(button) {
     if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
       navigator.mediaDevices.getUserMedia({ audio: true }).then((stream) => {
         mediaRecorder = new MediaRecorder(stream);
@@ -84,17 +78,17 @@ document.addEventListener("DOMContentLoaded", () => {
         };
 
         mediaRecorder.start();
-        mainActionButton.innerText = "Finished";
+        button.innerText = "Finished";
       });
     } else {
       console.error("Your browser does not support audio recording.");
     }
   }
 
-  function stopRecording() {
+  function stopRecording(button) {
     mediaRecorder.stop();
-    mainActionButton.innerText = "Loading...";
-    mainActionButton.disabled = true;
+    button.innerText = "Loading...";
+    button.disabled = true;
   }
 
   function displayStoryPart(text, image, audioUrl) {
@@ -102,20 +96,10 @@ document.addEventListener("DOMContentLoaded", () => {
     storyPart.className = "story-part";
     storyPart.innerHTML = `
       <p>${text.replace(/\n/g, "<br><br>")}</p>
-      <img src="${image}" alt="Story Image" />
+      <img src="${image}" alt="Story Image" style="width: 50%;" />
       <audio controls src="${audioUrl}"></audio>
     `;
     storyContainer.appendChild(storyPart);
-
-    // Add "What happens next?" button at the end of the story part
-    const nextButton = document.createElement("button");
-    nextButton.innerText = "What happens next?";
-    nextButton.id = "main-action";
-    nextButton.disabled = false;
-    nextButton.addEventListener("click", async () => {
-      startRecording();
-    });
-    storyContainer.appendChild(nextButton);
   }
 
   function addStoryPart(text, isUserInput) {
@@ -124,6 +108,21 @@ document.addEventListener("DOMContentLoaded", () => {
     part.innerHTML = text.replace(/\n/g, "<br><br>");
     storyContainer.appendChild(part);
     storyContainer.scrollTop = storyContainer.scrollHeight;
+  }
+
+  function createNextButton() {
+    const nextButton = document.createElement("button");
+    nextButton.className = "main-action";
+    nextButton.innerText = "What happens next?";
+    nextButton.disabled = false;
+    nextButton.onclick = async () => {
+      if (nextButton.innerText === "What happens next?") {
+        startRecording(nextButton);
+      } else if (nextButton.innerText === "Finished") {
+        stopRecording(nextButton);
+      }
+    };
+    storyContainer.appendChild(nextButton);
   }
 
   async function fetchStoryContinuation(userInput) {
@@ -149,19 +148,14 @@ document.addEventListener("DOMContentLoaded", () => {
 
       const result = await response.json();
       displayStoryPart(result.story, result.image, result.audioUrl);
-      if (result.choices.length === 0) {
-        mainActionButton.disabled = true;
-      } else {
-        addChoices(result.choices);
-      }
+      addChoices(result.choices);
       previousStory += " " + result.story.trim();
       previousInputs.push(userInput);
       inputCount++;
+      document.querySelector(".main-action").style.display = "none"; // Hide the previous button
+      createNextButton(); // Create the next button at the bottom
     } catch (error) {
       console.error("Error continuing the story:", error);
-    } finally {
-      mainActionButton.innerText = "What happens next?";
-      mainActionButton.disabled = false;
     }
   }
 
