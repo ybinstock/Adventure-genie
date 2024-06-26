@@ -1,24 +1,19 @@
 require("dotenv").config();
 const express = require("express");
 const bodyParser = require("body-parser");
+const multer = require("multer");
 const OpenAI = require("openai");
 const fs = require("fs");
 const path = require("path");
 const axios = require("axios");
-const multer = require("multer"); // Add multer
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-const app = express();
-app.use(bodyParser.json());
-app.use(express.static("public"));
-
-// Configure multer
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    const uploadPath = "uploads/";
+    const uploadPath = path.join(__dirname, "uploads");
     if (!fs.existsSync(uploadPath)) {
       fs.mkdirSync(uploadPath);
     }
@@ -32,69 +27,102 @@ const storage = multer.diskStorage({
 
 const upload = multer({ storage: storage });
 
+const app = express();
+app.use(bodyParser.json());
+app.use(express.static(path.join(__dirname, "public")));
+
+// Ensure the generated directory exists
+const generatedDir = path.join(__dirname, "public", "generated");
+if (!fs.existsSync(generatedDir)) {
+  fs.mkdirSync(generatedDir, { recursive: true });
+}
+
 async function generateStorySegment(genre, childGender, theme, age) {
-  const prompt = `Write the first segment of a children's story for a ${age}-year-old ${childGender} about ${theme}. The genre is ${genre}.`;
-  const response = await openai.chat.completions.create({
-    model: "gpt-3.5-turbo",
-    messages: [{ role: "user", content: prompt }],
-    temperature: 0.7,
-  });
-  return response.choices[0].message.content.trim();
+  const prompt = `Create a bedtime story in the ${genre} genre, featuring a ${childGender} aged ${age} with a theme of ${theme}. The story should introduce the main character and the initial setting or conflict. The story should be engaging and appropriate for a ${age}-year-old.`;
+  try {
+    const response = await openai.chat.completions.create({
+      model: "gpt-3.5-turbo",
+      messages: [
+        { role: "system", content: "You are a creative storyteller." },
+        { role: "user", content: prompt },
+      ],
+      max_tokens: 500,
+    });
+
+    const story = response.choices[0].message.content.trim();
+    return story;
+  } catch (error) {
+    console.error("Error generating story segment:", error.message);
+    throw error;
+  }
 }
 
 async function generateImage(description, index) {
-  const prompt = `An illustration in a consistent art style, with no text, no captions, no words, high quality. ${description}`;
-  const response = await openai.images.generate({
-    model: "dall-e-3",
-    prompt: prompt,
-    n: 1,
-    size: "1024x1024",
-  });
-  const imageUrl = response.data[0].url;
-  const imageResponse = await axios({
-    url: imageUrl,
-    method: "GET",
-    responseType: "arraybuffer",
-  });
-  const imagePath = path.resolve(
-    `./generated/story_image_part_${index + 1}.jpg`
-  );
-  fs.writeFileSync(imagePath, Buffer.from(imageResponse.data));
-  return `story_image_part_${index + 1}.jpg`;
+  console.log(`Generating image ${index + 1}...`);
+  const prompt = `An illustration in a consistent art style, with no text, no captions, no subtitles, high quality. ${description}`;
+  try {
+    const response = await openai.images.generate({
+      model: "dall-e-3",
+      prompt: prompt,
+      n: 1,
+      size: "1024x1024",
+    });
+    const imageUrl = response.data[0].url;
+    const imageResponse = await axios({
+      url: imageUrl,
+      method: "GET",
+      responseType: "arraybuffer",
+    });
+    const imagePath = path.resolve(
+      `./public/generated/story_image_part_${index + 1}.jpg`
+    );
+    fs.writeFileSync(imagePath, Buffer.from(imageResponse.data));
+    console.log(`Image ${index + 1} generated.`);
+    return `generated/story_image_part_${index + 1}.jpg`;
+  } catch (error) {
+    console.error(`Error generating image ${index + 1}:`, error);
+    throw error;
+  }
 }
 
-async function generateVoiceover(text) {
-  const response = await openai.audio.speech.create({
-    model: "tts-1",
-    voice: "nova",
-    input: text,
-  });
-  const buffer = Buffer.from(await response.arrayBuffer());
-  const audioPath = path.resolve("./generated/story_voice.mp3");
-  fs.writeFileSync(audioPath, buffer);
-  return "story_voice.mp3";
+async function generateVoiceover(text, index) {
+  console.log("Generating voiceover...");
+  try {
+    const response = await openai.audio.speech.create({
+      model: "tts-1",
+      voice: "nova",
+      input: text,
+    });
+    const buffer = Buffer.from(await response.arrayBuffer());
+    const audioPath = path.resolve(
+      `./public/generated/story_voice_part_${index + 1}.mp3`
+    );
+    fs.writeFileSync(audioPath, buffer);
+    console.log("Voiceover generated.");
+    return `generated/story_voice_part_${index + 1}.mp3`;
+  } catch (error) {
+    console.error("Error generating voiceover:", error);
+    throw error;
+  }
 }
 
 app.post("/generate-story", async (req, res) => {
+  const { genre, childGender, theme, age } = req.body;
+
   try {
-    const { genre, childGender, theme, age } = req.body;
     const storySegment = await generateStorySegment(
       genre,
       childGender,
       theme,
       age
     );
+    const image = await generateImage(storySegment, 0);
+    const audioUrl = await generateVoiceover(storySegment, 0);
 
-    const imagePath = await generateImage(
-      `A scene from the story: ${storySegment}.`,
-      0
-    );
-    const audioPath = await generateVoiceover(storySegment);
-
-    res.json({ story: storySegment, image: imagePath, audioUrl: audioPath });
+    res.json({ story: storySegment, image, audioUrl, choices: [] }); // Empty choices for initial story
   } catch (error) {
-    console.error("Error generating story:", error);
-    res.status(500).send("Error generating story");
+    console.error("Error generating story:", error.message);
+    res.status(500).json({ error: "Error generating story" });
   }
 });
 
@@ -138,7 +166,7 @@ app.post("/continue-story", async (req, res) => {
         },
         { role: "user", content: storyPrompt },
       ],
-      max_tokens: 300,
+      max_tokens: 350,
     });
 
     let storyText = response.choices[0].message.content;
@@ -170,7 +198,9 @@ app.post("/continue-story", async (req, res) => {
     }
 
     storyText = storyText.trim() + "\n\n";
-    res.json({ story: storyText, choices });
+    const image = await generateImage(storyText, inputCount + 1); // Generate new image for the segment
+    const audioUrl = await generateVoiceover(storyText, inputCount + 1); // Generate new voiceover for the segment
+    res.json({ story: storyText, choices, image, audioUrl });
   } catch (error) {
     console.error("Error generating story:", error.message);
     res.status(500).json({ error: "Error generating story" });

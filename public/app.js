@@ -4,46 +4,51 @@ document.addEventListener("DOMContentLoaded", () => {
   let previousStory = "";
   let previousInputs = [];
   let inputCount = 0;
-  const mainActionButton = document.getElementById("mainActionButton");
+  const form = document.getElementById("storyForm");
+  const mainActionButton = document.getElementById("main-action");
   const storyContainer = document.getElementById("story-container");
 
-  document
-    .getElementById("storyForm")
-    .addEventListener("submit", async (event) => {
-      event.preventDefault();
-      mainActionButton.disabled = true;
-      mainActionButton.innerText = "Loading...";
+  form.addEventListener("submit", async function (event) {
+    event.preventDefault();
 
-      const genre = document.getElementById("genre").value;
-      const childGender = document.getElementById("childGender").value;
-      const theme = document.getElementById("theme").value;
-      const age = document.getElementById("age").value;
-      const artStyle = document.getElementById("artStyle").value;
+    const genre = document.getElementById("genre").value;
+    const childGender = document.getElementById("childGender").value;
+    const theme = document.getElementById("theme").value;
+    const age = document.getElementById("age").value;
 
+    mainActionButton.disabled = true;
+    mainActionButton.innerText = "Loading...";
+
+    storyContainer.innerHTML = "";
+    document.getElementById("audioOutput").innerHTML = "";
+
+    try {
       const response = await fetch("/generate-story", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ genre, childGender, theme, age, artStyle }),
+        body: JSON.stringify({ genre, childGender, theme, age }),
       });
 
       if (response.ok) {
         const data = await response.json();
-        displayStoryPart(data.story, data.image, data.audioUrl, data.choices);
+        displayStoryPart(data.story, data.image, data.audioUrl);
         mainActionButton.innerText = "What happens next?";
+        mainActionButton.disabled = false;
       } else {
         console.error("Error generating story:", response.statusText);
-        mainActionButton.innerText = "Create Story";
       }
-      mainActionButton.disabled = false;
-    });
+    } catch (error) {
+      console.error("Error generating story:", error);
+    }
+  });
 
   mainActionButton.addEventListener("click", async () => {
-    if (mainActionButton.innerText === "Finished") {
-      stopRecording();
-    } else if (mainActionButton.innerText === "What happens next?") {
+    if (mainActionButton.innerText === "What happens next?") {
       startRecording();
+    } else if (mainActionButton.innerText === "Finished") {
+      stopRecording();
     }
   });
 
@@ -51,122 +56,125 @@ document.addEventListener("DOMContentLoaded", () => {
     if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
       navigator.mediaDevices.getUserMedia({ audio: true }).then((stream) => {
         mediaRecorder = new MediaRecorder(stream);
-        audioChunks = [];
         mediaRecorder.ondataavailable = (event) => {
           audioChunks.push(event.data);
         };
-        mediaRecorder.onstop = async () => {
+        mediaRecorder.onstop = () => {
           const audioBlob = new Blob(audioChunks, { type: "audio/webm" });
           const formData = new FormData();
           formData.append("audio", audioBlob, "audio.webm");
 
-          mainActionButton.disabled = true;
-          mainActionButton.innerText = "Loading...";
-
-          const response = await fetch("/transcribe", {
+          fetch("/transcribe", {
             method: "POST",
             body: formData,
-          });
-
-          if (response.ok) {
-            const data = await response.json();
-            const userInput = data.transcription.trim();
-            previousInputs.push(userInput);
-            previousStory += `\n${userInput}`;
-            inputCount++;
-
-            const continueResponse = await fetch("/continue-story", {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify({
-                userInput,
-                previousStory,
-                inputCount,
-              }),
-            });
-
-            if (continueResponse.ok) {
-              const continueData = await continueResponse.json();
-              displayStoryPart(
-                continueData.story,
-                null,
-                null,
-                continueData.choices
-              );
-              mainActionButton.innerText = "What happens next?";
-            } else {
+          })
+            .then((response) => response.json())
+            .then((data) => {
+              const cleanedInput = cleanUserInput(data.transcription);
+              addStoryPart(cleanedInput, true);
+              fetchStoryContinuation(cleanedInput);
+            })
+            .catch((error) =>
               console.error(
-                "Error continuing story:",
-                continueResponse.statusText
-              );
-              mainActionButton.innerText = "What happens next?";
-            }
-          } else {
-            console.error("Error transcribing audio:", response.statusText);
-            mainActionButton.innerText = "What happens next?";
-          }
-          mainActionButton.disabled = false;
+                "There was a problem with the fetch operation:",
+                error
+              )
+            );
         };
+
         mediaRecorder.start();
         mainActionButton.innerText = "Finished";
       });
     } else {
-      console.error("getUserMedia not supported on your browser!");
+      console.error("Your browser does not support audio recording.");
     }
   }
 
   function stopRecording() {
-    if (mediaRecorder && mediaRecorder.state === "recording") {
-      mediaRecorder.stop();
+    mediaRecorder.stop();
+    mainActionButton.innerText = "Loading...";
+    mainActionButton.disabled = true;
+  }
+
+  function displayStoryPart(text, image, audioUrl) {
+    const storyPart = document.createElement("div");
+    storyPart.className = "story-part";
+    storyPart.innerHTML = `
+      <p>${text.replace(/\n/g, "<br><br>")}</p>
+      <img src="${image}" alt="Story Image" style="width: 100%;" />
+      <audio controls src="${audioUrl}"></audio>
+    `;
+    storyContainer.appendChild(storyPart);
+  }
+
+  function addStoryPart(text, isUserInput) {
+    const part = document.createElement("div");
+    part.className = isUserInput ? "user-input" : "story-part";
+    part.innerHTML = text.replace(/\n/g, "<br><br>");
+    storyContainer.appendChild(part);
+    storyContainer.scrollTop = storyContainer.scrollHeight;
+  }
+
+  async function fetchStoryContinuation(userInput) {
+    try {
+      const response = await fetch("/continue-story", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          userInput,
+          previousStory,
+          inputCount,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(
+          `Network response was not ok: ${response.statusText} - ${errorText}`
+        );
+      }
+
+      const result = await response.json();
+      displayStoryPart(result.story, result.image, result.audioUrl);
+      if (result.choices.length === 0) {
+        mainActionButton.disabled = true;
+      } else {
+        addChoices(result.choices);
+      }
+      previousStory += " " + result.story.trim();
+      previousInputs.push(userInput);
+      inputCount++;
+    } catch (error) {
+      console.error("Error continuing the story:", error);
+    } finally {
+      mainActionButton.innerText = "What happens next?";
+      mainActionButton.disabled = false;
     }
   }
 
-  function displayStoryPart(story, imageUrl, audioUrl, choices) {
-    const part = document.createElement("div");
-    part.className = "story-part";
+  function addChoices(choices) {
+    const choicesDiv = document.createElement("div");
+    choicesDiv.className = "choices";
+    choices.forEach((choice) => {
+      const choiceP = document.createElement("p");
+      choiceP.textContent = choice;
+      choicesDiv.appendChild(choiceP);
+    });
+    storyContainer.appendChild(choicesDiv);
+    storyContainer.scrollTop = storyContainer.scrollHeight;
+  }
 
-    const storyText = document.createElement("p");
-    storyText.innerText = story;
-    part.appendChild(storyText);
+  function cleanUserInput(userInput) {
+    let cleanInput = userInput.trim();
 
-    if (imageUrl) {
-      const img = document.createElement("img");
-      img.src = imageUrl;
-      img.alt = "Story Image";
-      img.style.width = "100%";
-      part.appendChild(img);
-    }
+    previousInputs.forEach((input) => {
+      const escapedInput = input.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const regex = new RegExp(`(^|\\s)${escapedInput}(?=$|[.,!?\s])`, "gi");
+      cleanInput = cleanInput.replace(regex, "").trim();
+    });
 
-    if (audioUrl) {
-      const audio = document.createElement("audio");
-      audio.controls = true;
-      audio.src = audioUrl;
-      part.appendChild(audio);
-    }
-
-    if (choices && choices.length > 0) {
-      const choicesContainer = document.createElement("div");
-      choicesContainer.className = "choices";
-      choices.forEach((choice) => {
-        const choiceParagraph = document.createElement("p");
-        choiceParagraph.innerText = choice;
-        choicesContainer.appendChild(choiceParagraph);
-      });
-      part.appendChild(choicesContainer);
-    }
-
-    storyContainer.appendChild(part);
-    part.scrollIntoView({ behavior: "smooth" });
-
-    const newButton = document.createElement("button");
-    newButton.innerText = "What happens next?";
-    newButton.id = "mainActionButton";
-    newButton.disabled = false;
-    storyContainer.appendChild(newButton);
-
-    mainActionButton.remove();
-    mainActionButton = newButton;
+    return cleanInput;
   }
 });
