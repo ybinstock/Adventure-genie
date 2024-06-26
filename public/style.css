@@ -1,9 +1,9 @@
 body {
-  font-family: Arial, sans-serif;
+  font-family: 'Comic Sans MS', sans-serif; /* Example of a child-friendly font */
   text-align: center;
   margin: 0;
   padding: 0;
-  background-color: #f0f0f0;
+  background-color: #f0f8ff; /* Light blue background for a calming effect */
 }
 
 .container {
@@ -22,6 +22,10 @@ header {
 form {
   text-align: left;
   margin-bottom: 20px;
+  font-family: 'Arial', sans-serif;
+  background: #ffe4e1; /* Light pink background for form */
+  padding: 20px;
+  border-radius: 8px;
 }
 
 .form-group {
@@ -31,12 +35,15 @@ form {
 label {
   display: block;
   margin-bottom: 5px;
+  color: #333;
+  font-size: 18px;
 }
 
 select {
   width: 100%;
   padding: 8px;
   margin-bottom: 10px;
+  border-radius: 4px;
 }
 
 button {
@@ -44,16 +51,18 @@ button {
   padding: 10px 20px;
   font-size: 16px;
   cursor: pointer;
-  display: inline-block;
+  border-radius: 8px;
+  background-color: #ff69b4; /* Bright pink button */
+  color: white;
+  border: none;
 }
 
 button:disabled {
-  cursor: not-allowed;
-  opacity: 0.5;
+  background-color: #ffc0cb; /* Light pink when disabled */
 }
 
-.story-part {
-  margin-bottom: 20px;
+.story-part img {
+  width: 50%; /* Reduce image size by 50% */
 }
 
 .user-input {

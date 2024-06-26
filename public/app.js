@@ -7,6 +7,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const form = document.getElementById("storyForm");
   const mainActionButton = document.getElementById("main-action");
   const storyContainer = document.getElementById("story-container");
+  const loadingDiv = document.getElementById("loading");
 
   form.addEventListener("submit", async function (event) {
     event.preventDefault();
@@ -16,9 +17,8 @@ document.addEventListener("DOMContentLoaded", () => {
     const theme = document.getElementById("theme").value;
     const age = document.getElementById("age").value;
 
-    mainActionButton.disabled = true;
     mainActionButton.innerText = "Loading...";
-
+    mainActionButton.disabled = true;
     storyContainer.innerHTML = "";
     document.getElementById("audioOutput").innerHTML = "";
 
@@ -34,6 +34,7 @@ document.addEventListener("DOMContentLoaded", () => {
       if (response.ok) {
         const data = await response.json();
         displayStoryPart(data.story, data.image, data.audioUrl);
+        addChoices(data.choices);
         mainActionButton.innerText = "What happens next?";
         mainActionButton.disabled = false;
       } else {
@@ -101,10 +102,20 @@ document.addEventListener("DOMContentLoaded", () => {
     storyPart.className = "story-part";
     storyPart.innerHTML = `
       <p>${text.replace(/\n/g, "<br><br>")}</p>
-      <img src="${image}" alt="Story Image" style="width: 100%;" />
+      <img src="${image}" alt="Story Image" />
       <audio controls src="${audioUrl}"></audio>
     `;
     storyContainer.appendChild(storyPart);
+
+    // Add "What happens next?" button at the end of the story part
+    const nextButton = document.createElement("button");
+    nextButton.innerText = "What happens next?";
+    nextButton.id = "main-action";
+    nextButton.disabled = false;
+    nextButton.addEventListener("click", async () => {
+      startRecording();
+    });
+    storyContainer.appendChild(nextButton);
   }
 
   function addStoryPart(text, isUserInput) {

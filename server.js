@@ -29,7 +29,7 @@ const upload = multer({ storage: storage });
 
 const app = express();
 app.use(bodyParser.json());
-app.use(express.static(path.join(__dirname, "public")));
+app.use(express.static(path.join(__dirname, "public"))); // Ensure correct static file path
 
 // Ensure the generated directory exists
 const generatedDir = path.join(__dirname, "public", "generated");
@@ -37,26 +37,7 @@ if (!fs.existsSync(generatedDir)) {
   fs.mkdirSync(generatedDir, { recursive: true });
 }
 
-async function generateStorySegment(genre, childGender, theme, age) {
-  const prompt = `Create a bedtime story in the ${genre} genre, featuring a ${childGender} aged ${age} with a theme of ${theme}. The story should introduce the main character and the initial setting or conflict. The story should be engaging and appropriate for a ${age}-year-old.`;
-  try {
-    const response = await openai.chat.completions.create({
-      model: "gpt-3.5-turbo",
-      messages: [
-        { role: "system", content: "You are a creative storyteller." },
-        { role: "user", content: prompt },
-      ],
-      max_tokens: 500,
-    });
-
-    const story = response.choices[0].message.content.trim();
-    return story;
-  } catch (error) {
-    console.error("Error generating story segment:", error.message);
-    throw error;
-  }
-}
-
+// Function to generate images
 async function generateImage(description, index) {
   console.log(`Generating image ${index + 1}...`);
   const prompt = `An illustration in a consistent art style, with no text, no captions, no subtitles, high quality. ${description}`;
@@ -85,6 +66,7 @@ async function generateImage(description, index) {
   }
 }
 
+// Function to generate voiceovers
 async function generateVoiceover(text, index) {
   console.log("Generating voiceover...");
   try {
@@ -106,26 +88,68 @@ async function generateVoiceover(text, index) {
   }
 }
 
+// Function to count tokens in a string
+const countTokens = (text) => {
+  return text.split(" ").length;
+};
+
+// Endpoint to generate initial story
 app.post("/generate-story", async (req, res) => {
-  const { genre, childGender, theme, age } = req.body;
+  const { genre, childGender, theme, age, artStyle } = req.body;
+
+  const prompt = `Create the beginning of a bedtime story in the ${genre} genre, featuring a ${childGender} aged ${age} with a theme of ${theme}. Illustrate it in ${artStyle} style. End the segment with a prompt for choices.`;
 
   try {
-    const storySegment = await generateStorySegment(
-      genre,
-      childGender,
-      theme,
-      age
-    );
-    const image = await generateImage(storySegment, 0);
-    const audioUrl = await generateVoiceover(storySegment, 0);
+    const response = await openai.chat.completions.create({
+      model: "gpt-3.5-turbo",
+      messages: [
+        { role: "system", content: "You are a creative storyteller." },
+        { role: "user", content: prompt },
+      ],
+      max_tokens: 500,
+    });
 
-    res.json({ story: storySegment, image, audioUrl, choices: [] }); // Empty choices for initial story
+    const story = response.choices[0].message.content.trim();
+
+    // Generate image for the story
+    const image = await generateImage(story, 0);
+
+    // Generate audio narration
+    const audioUrl = await generateVoiceover(story, 0);
+
+    // Generate choices for the next part of the story
+    const choicesPrompt = `Based on the following story, generate three relevant choices for the next part of the story. Each choice must be 20 tokens or fewer:\n\n${story}`;
+
+    const choicesResponse = await openai.chat.completions.create({
+      model: "gpt-3.5-turbo",
+      messages: [
+        {
+          role: "system",
+          content:
+            "You are a creative AI that helps continue a story for a child.",
+        },
+        { role: "user", content: choicesPrompt },
+      ],
+      max_tokens: 100,
+    });
+
+    const choices = choicesResponse.choices[0].message.content
+      .split("\n")
+      .filter((choice) => choice.trim() !== "")
+      .map((choice) => choice.replace(/^\d+\.\s*/, "").trim()) // Remove leading numbers and trim spaces
+      .filter((choice) => countTokens(choice) <= 20) // Ensure each choice is 20 tokens or fewer
+      .slice(0, 3) // Take only the first three choices
+      .map((choice, index) => `${index + 1}. ${choice}`); // Add leading numbers
+
+    // Return the story, image, audio URL, and choices
+    res.json({ story, image, audioUrl, choices });
   } catch (error) {
     console.error("Error generating story:", error.message);
     res.status(500).json({ error: "Error generating story" });
   }
 });
 
+// Endpoint to handle audio transcription
 app.post("/transcribe", upload.single("audio"), async (req, res) => {
   try {
     if (!req.file) {
@@ -145,6 +169,7 @@ app.post("/transcribe", upload.single("audio"), async (req, res) => {
   }
 });
 
+// Endpoint to continue the story based on user input
 app.post("/continue-story", async (req, res) => {
   const { userInput, previousStory, inputCount } = req.body;
   console.log(`Input Count: ${inputCount}`);
@@ -166,7 +191,7 @@ app.post("/continue-story", async (req, res) => {
         },
         { role: "user", content: storyPrompt },
       ],
-      max_tokens: 350,
+      max_tokens: 300,
     });
 
     let storyText = response.choices[0].message.content;
@@ -197,9 +222,13 @@ app.post("/continue-story", async (req, res) => {
         .map((choice, index) => `${index + 1}. ${choice}`); // Add leading numbers
     }
 
+    // Generate image for the new story segment
+    const image = await generateImage(storyText, inputCount);
+
+    // Generate audio narration for the new story segment
+    const audioUrl = await generateVoiceover(storyText, inputCount);
+
     storyText = storyText.trim() + "\n\n";
-    const image = await generateImage(storyText, inputCount + 1); // Generate new image for the segment
-    const audioUrl = await generateVoiceover(storyText, inputCount + 1); // Generate new voiceover for the segment
     res.json({ story: storyText, choices, image, audioUrl });
   } catch (error) {
     console.error("Error generating story:", error.message);
