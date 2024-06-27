@@ -57,9 +57,10 @@ async function generateImage(description, index) {
       `./public/generated/story_image_part_${index + 1}.jpg`
     );
     fs.writeFileSync(imagePath, Buffer.from(imageResponse.data));
+    // console.log(`Generated image part ${index + 1} at: ${imagePath}`);
     return `generated/story_image_part_${index + 1}.jpg`;
   } catch (error) {
-    console.error(`Error generating image part ${index + 1}:`, error);
+    // console.error(`Error generating image part ${index + 1}:`, error);
     throw error;
   }
 }
@@ -76,6 +77,7 @@ async function generateVoiceover(text, index) {
       `./public/generated/story_voice_part_${index + 1}.mp3`
     );
     fs.writeFileSync(audioPath, buffer);
+    // console.log(`Generated voiceover part ${index + 1} at: ${audioPath}`);
     return `generated/story_voice_part_${index + 1}.mp3`;
   } catch (error) {
     console.error("Error generating voiceover:", error);
@@ -103,6 +105,7 @@ app.post("/generate-story", async (req, res) => {
     });
 
     const story = response.choices[0].message.content.trim();
+    // console.log("Initial story generated:", story);
 
     const image = await generateImage(story, 0);
     const audioUrl = await generateVoiceover(story, 0);
@@ -158,6 +161,8 @@ app.post("/transcribe", upload.single("audio"), async (req, res) => {
 
 app.post("/continue-story", async (req, res) => {
   const { userInput, previousStory, inputCount } = req.body;
+  // console.log(`Input Count: ${inputCount}`);
+  // console.log(`User Input (server-side): ${userInput}`);
   try {
     const storyPrompt = `${previousStory}\n\nThe user input is: "${userInput}".\n\nPlease continue the story based on the user's input ${
       inputCount < 2
@@ -206,6 +211,7 @@ app.post("/continue-story", async (req, res) => {
         .map((choice, index) => `${index + 1}. ${choice}`);
     }
 
+    // Increment inputCount to ensure new parts are generated with unique indices
     const image = await generateImage(storyText, inputCount + 1);
     const audioUrl = await generateVoiceover(storyText, inputCount + 1);
 

@@ -31,6 +31,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
       if (response.ok) {
         const data = await response.json();
+        // console.log("Received initial data:", data);
         displayStoryPart(data.story, data.image, data.audioUrl, data.choices);
         mainActionButton.style.display = "none";
       } else {
@@ -53,7 +54,7 @@ document.addEventListener("DOMContentLoaded", () => {
         startRecording(newActionButton);
       } else if (
         newActionButton.innerText ===
-        "Use your voice to choose what happens next and click when finished."
+        "Choose with your voice and click when finished."
       ) {
         stopRecording(newActionButton);
       }
@@ -79,6 +80,7 @@ document.addEventListener("DOMContentLoaded", () => {
           })
             .then((response) => response.json())
             .then((data) => {
+              // console.log("Received transcription:", data.transcription);
               const cleanedInput = cleanUserInput(data.transcription);
               addStoryPart(cleanedInput, true);
               fetchStoryContinuation(cleanedInput, button);
@@ -106,6 +108,8 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function displayStoryPart(text, image, audioUrl, choices) {
+    // console.log("Displaying story part with image:", image);
+
     const storyPart = document.createElement("div");
     storyPart.className = "story-part";
     storyPart.innerHTML = `
@@ -151,6 +155,7 @@ document.addEventListener("DOMContentLoaded", () => {
       }
 
       const result = await response.json();
+      // console.log("Received continuation data with image:", result.image);
 
       button.remove();
       displayStoryPart(
