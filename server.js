@@ -29,19 +29,17 @@ const upload = multer({ storage: storage });
 
 const app = express();
 app.use(bodyParser.json());
-app.use(express.static(path.join(__dirname, "public"))); // Ensure correct static file path
+app.use(express.static(path.join(__dirname, "public")));
 
-// Ensure the generated directory exists
 const generatedDir = path.join(__dirname, "public", "generated");
 if (!fs.existsSync(generatedDir)) {
   fs.mkdirSync(generatedDir, { recursive: true });
 }
 
-// Function to generate images
 async function generateImage(description, index) {
-  console.log(`Generating image ${index + 1}...`);
-  const prompt = `Create an illustration suitable for a children's story. The image should be in a consistent art style, with no text, no captions, no subtitles, no words, no letters, no numbers, and no symbols. Ensure the illustration is high quality. The image should be purely visual without any textual elements ${description}`;
-
+  const prompt = `Create an illustration suitable for a children's story. The image should be in a consistent art style, with no text, no captions, no subtitles, no words, no letters, no numbers, no symbols, no writing. Ensure the illustration is high quality. This image is for segment ${
+    index + 1
+  } of the story. ${description}`;
   try {
     const response = await openai.images.generate({
       model: "dall-e-3",
@@ -59,17 +57,14 @@ async function generateImage(description, index) {
       `./public/generated/story_image_part_${index + 1}.jpg`
     );
     fs.writeFileSync(imagePath, Buffer.from(imageResponse.data));
-    console.log(`Image ${index + 1} generated.`);
     return `generated/story_image_part_${index + 1}.jpg`;
   } catch (error) {
-    console.error(`Error generating image ${index + 1}:`, error);
+    console.error(`Error generating image part ${index + 1}:`, error);
     throw error;
   }
 }
 
-// Function to generate voiceovers
 async function generateVoiceover(text, index) {
-  console.log("Generating voiceover...");
   try {
     const response = await openai.audio.speech.create({
       model: "tts-1",
@@ -81,7 +76,6 @@ async function generateVoiceover(text, index) {
       `./public/generated/story_voice_part_${index + 1}.mp3`
     );
     fs.writeFileSync(audioPath, buffer);
-    console.log("Voiceover generated.");
     return `generated/story_voice_part_${index + 1}.mp3`;
   } catch (error) {
     console.error("Error generating voiceover:", error);
@@ -89,12 +83,10 @@ async function generateVoiceover(text, index) {
   }
 }
 
-// Function to count tokens in a string
 const countTokens = (text) => {
   return text.split(" ").length;
 };
 
-// Endpoint to generate initial story
 app.post("/generate-story", async (req, res) => {
   const { genre, childGender, theme, age, artStyle } = req.body;
 
@@ -111,16 +103,11 @@ app.post("/generate-story", async (req, res) => {
     });
 
     const story = response.choices[0].message.content.trim();
-    const storyText = story.replace(/Illustration: \[.*?\]/g, ""); // Remove illustration descriptions from the story
 
-    // Generate image for the story
     const image = await generateImage(story, 0);
-
-    // Generate audio narration
     const audioUrl = await generateVoiceover(story, 0);
 
-    // Generate choices for the next part of the story
-    const choicesPrompt = `Based on the following story, generate three relevant choices for the next part of the story. Each choice must be 20 tokens or fewer:\n\n${storyText}`;
+    const choicesPrompt = `Based on the following story, generate three relevant choices for the next part of the story. Each choice must be 20 tokens or fewer:\n\n${story}`;
 
     const choicesResponse = await openai.chat.completions.create({
       model: "gpt-3.5-turbo",
@@ -138,20 +125,18 @@ app.post("/generate-story", async (req, res) => {
     const choices = choicesResponse.choices[0].message.content
       .split("\n")
       .filter((choice) => choice.trim() !== "")
-      .map((choice) => choice.replace(/^\d+\.\s*/, "").trim()) // Remove leading numbers and trim spaces
-      .filter((choice) => countTokens(choice) <= 20) // Ensure each choice is 20 tokens or fewer
-      .slice(0, 3) // Take only the first three choices
-      .map((choice, index) => `Choice ${index + 1}: ${choice}`); // Add leading numbers
+      .map((choice) => choice.replace(/^\d+\.\s*/, "").trim())
+      .filter((choice) => countTokens(choice) <= 20)
+      .slice(0, 3)
+      .map((choice, index) => `${index + 1}. ${choice}`);
 
-    // Return the story, image, audio URL, and choices
-    res.json({ story: storyText, image, audioUrl, choices });
+    res.json({ story, image, audioUrl, choices });
   } catch (error) {
     console.error("Error generating story:", error.message);
     res.status(500).json({ error: "Error generating story" });
   }
 });
 
-// Endpoint to handle audio transcription
 app.post("/transcribe", upload.single("audio"), async (req, res) => {
   try {
     if (!req.file) {
@@ -171,11 +156,8 @@ app.post("/transcribe", upload.single("audio"), async (req, res) => {
   }
 });
 
-// Endpoint to continue the story based on user input
 app.post("/continue-story", async (req, res) => {
   const { userInput, previousStory, inputCount } = req.body;
-  console.log(`Input Count: ${inputCount}`);
-  console.log(`User Input (server-side): ${userInput}`);
   try {
     const storyPrompt = `${previousStory}\n\nThe user input is: "${userInput}".\n\nPlease continue the story based on the user's input ${
       inputCount < 2
@@ -197,7 +179,6 @@ app.post("/continue-story", async (req, res) => {
     });
 
     let storyText = response.choices[0].message.content;
-    storyText = storyText.replace(/Illustration: \[.*?\]/g, ""); // Remove illustration descriptions
 
     let choices = [];
     if (inputCount < 2) {
@@ -219,17 +200,14 @@ app.post("/continue-story", async (req, res) => {
       choices = choicesResponse.choices[0].message.content
         .split("\n")
         .filter((choice) => choice.trim() !== "")
-        .map((choice) => choice.replace(/^\d+\.\s*/, "").trim()) // Remove leading numbers and trim spaces
-        .filter((choice) => countTokens(choice) <= 20) // Ensure each choice is 20 tokens or fewer
-        .slice(0, 3) // Take only the first three choices
-        .map((choice, index) => `Choice ${index + 1}: ${choice}`); // Add leading numbers
+        .map((choice) => choice.replace(/^\d+\.\s*/, "").trim())
+        .filter((choice) => countTokens(choice) <= 20)
+        .slice(0, 3)
+        .map((choice, index) => `${index + 1}. ${choice}`);
     }
 
-    // Generate image for the new story segment
-    const image = await generateImage(storyText, inputCount);
-
-    // Generate audio narration for the new story segment
-    const audioUrl = await generateVoiceover(storyText, inputCount);
+    const image = await generateImage(storyText, inputCount + 1);
+    const audioUrl = await generateVoiceover(storyText, inputCount + 1);
 
     storyText = storyText.trim() + "\n\n";
     res.json({ story: storyText, choices, image, audioUrl });

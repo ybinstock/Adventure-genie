@@ -8,9 +8,6 @@ document.addEventListener("DOMContentLoaded", () => {
   const mainActionButton = document.getElementById("main-action");
   const storyContainer = document.getElementById("story-container");
 
-  /**
-   * Event listener for form submission to generate the initial story.
-   */
   form.addEventListener("submit", async function (event) {
     event.preventDefault();
 
@@ -47,9 +44,6 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
-  /**
-   * Creates a new action button for the user to interact with the story.
-   */
   function createNewActionButton() {
     const newActionButton = document.createElement("button");
     newActionButton.innerText = "What happens next?";
@@ -59,7 +53,7 @@ document.addEventListener("DOMContentLoaded", () => {
         startRecording(newActionButton);
       } else if (
         newActionButton.innerText ===
-        "Choose with your voice and click when finished."
+        "Use your voice to choose what happens next and click when finished."
       ) {
         stopRecording(newActionButton);
       }
@@ -67,10 +61,6 @@ document.addEventListener("DOMContentLoaded", () => {
     return newActionButton;
   }
 
-  /**
-   * Starts audio recording and changes the button text to "Choose with your voice and click when finished."
-   * @param {HTMLElement} button - The button element to update.
-   */
   function startRecording(button) {
     if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
       navigator.mediaDevices.getUserMedia({ audio: true }).then((stream) => {
@@ -109,23 +99,12 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  /**
-   * Stops audio recording and changes the button text to "Loading...".
-   * @param {HTMLElement} button - The button element to update.
-   */
   function stopRecording(button) {
     mediaRecorder.stop();
     button.innerText = "Loading...";
     button.disabled = true;
   }
 
-  /**
-   * Displays a part of the story with text, image, audio, and choices.
-   * @param {string} text - The story text to display.
-   * @param {string} image - The URL of the image to display.
-   * @param {string} audioUrl - The URL of the audio to display.
-   * @param {Array} choices - The choices for the next part of the story.
-   */
   function displayStoryPart(text, image, audioUrl, choices) {
     const storyPart = document.createElement("div");
     storyPart.className = "story-part";
@@ -142,11 +121,6 @@ document.addEventListener("DOMContentLoaded", () => {
     storyContainer.scrollTop = storyContainer.scrollHeight;
   }
 
-  /**
-   * Adds a user input part to the story.
-   * @param {string} text - The user input text to add.
-   * @param {boolean} isUserInput - Flag indicating if the text is user input.
-   */
   function addStoryPart(text, isUserInput) {
     const part = document.createElement("div");
     part.className = isUserInput ? "user-input" : "story-part";
@@ -155,11 +129,6 @@ document.addEventListener("DOMContentLoaded", () => {
     storyContainer.scrollTop = storyContainer.scrollHeight;
   }
 
-  /**
-   * Fetches the continuation of the story based on user input.
-   * @param {string} userInput - The user input to base the story continuation on.
-   * @param {HTMLElement} button - The button element to update.
-   */
   async function fetchStoryContinuation(userInput, button) {
     try {
       const response = await fetch("/continue-story", {
@@ -182,6 +151,8 @@ document.addEventListener("DOMContentLoaded", () => {
       }
 
       const result = await response.json();
+
+      button.remove();
       displayStoryPart(
         result.story,
         result.image,
@@ -199,11 +170,6 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  /**
-   * Cleans user input by removing previously recorded inputs from it.
-   * @param {string} userInput - The user input to clean.
-   * @returns {string} - The cleaned user input.
-   */
   function cleanUserInput(userInput) {
     let cleanInput = userInput.trim();
 
