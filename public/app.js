@@ -7,8 +7,10 @@ document.addEventListener("DOMContentLoaded", () => {
   const form = document.getElementById("storyForm");
   const mainActionButton = document.getElementById("main-action");
   const storyContainer = document.getElementById("story-container");
-  const loadingDiv = document.getElementById("loading");
 
+  /**
+   * Event listener for form submission to generate the initial story.
+   */
   form.addEventListener("submit", async function (event) {
     event.preventDefault();
 
@@ -16,12 +18,10 @@ document.addEventListener("DOMContentLoaded", () => {
     const childGender = document.getElementById("childGender").value;
     const theme = document.getElementById("theme").value;
     const age = document.getElementById("age").value;
-    const artStyle = document.getElementById("artStyle").value;
 
-    loadingDiv.style.display = "block";
+    mainActionButton.innerText = "Loading...";
+    mainActionButton.disabled = true;
     storyContainer.innerHTML = "";
-    document.getElementById("audioOutput").innerHTML = "";
-    mainActionButton.style.display = "none"; // Hide the main action button
 
     try {
       const response = await fetch("/generate-story", {
@@ -29,24 +29,48 @@ document.addEventListener("DOMContentLoaded", () => {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ genre, childGender, theme, age, artStyle }),
+        body: JSON.stringify({ genre, childGender, theme, age }),
       });
 
       if (response.ok) {
         const data = await response.json();
-        displayStoryPart(data.story, data.image, data.audioUrl);
-        addChoices(data.choices);
-        createNextButton();
+        displayStoryPart(data.story, data.image, data.audioUrl, data.choices);
+        mainActionButton.style.display = "none";
       } else {
         console.error("Error generating story:", response.statusText);
       }
     } catch (error) {
       console.error("Error generating story:", error);
     } finally {
-      loadingDiv.style.display = "none";
+      mainActionButton.innerText = "What happens next?";
+      mainActionButton.disabled = false;
     }
   });
 
+  /**
+   * Creates a new action button for the user to interact with the story.
+   */
+  function createNewActionButton() {
+    const newActionButton = document.createElement("button");
+    newActionButton.innerText = "What happens next?";
+    newActionButton.classList.add("action-button");
+    newActionButton.addEventListener("click", async () => {
+      if (newActionButton.innerText === "What happens next?") {
+        startRecording(newActionButton);
+      } else if (
+        newActionButton.innerText ===
+        "Choose with your voice and click when finished."
+      ) {
+        stopRecording(newActionButton);
+      }
+    });
+    return newActionButton;
+  }
+
+  /**
+   * Starts audio recording and changes the button text to "Choose with your voice and click when finished."
+   * @param {HTMLElement} button - The button element to update.
+   */
   function startRecording(button) {
     if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
       navigator.mediaDevices.getUserMedia({ audio: true }).then((stream) => {
@@ -67,7 +91,7 @@ document.addEventListener("DOMContentLoaded", () => {
             .then((data) => {
               const cleanedInput = cleanUserInput(data.transcription);
               addStoryPart(cleanedInput, true);
-              fetchStoryContinuation(cleanedInput);
+              fetchStoryContinuation(cleanedInput, button);
             })
             .catch((error) =>
               console.error(
@@ -78,30 +102,51 @@ document.addEventListener("DOMContentLoaded", () => {
         };
 
         mediaRecorder.start();
-        button.innerText = "Finished";
+        button.innerText = "Choose with your voice and click when finished.";
       });
     } else {
       console.error("Your browser does not support audio recording.");
     }
   }
 
+  /**
+   * Stops audio recording and changes the button text to "Loading...".
+   * @param {HTMLElement} button - The button element to update.
+   */
   function stopRecording(button) {
     mediaRecorder.stop();
     button.innerText = "Loading...";
     button.disabled = true;
   }
 
-  function displayStoryPart(text, image, audioUrl) {
+  /**
+   * Displays a part of the story with text, image, audio, and choices.
+   * @param {string} text - The story text to display.
+   * @param {string} image - The URL of the image to display.
+   * @param {string} audioUrl - The URL of the audio to display.
+   * @param {Array} choices - The choices for the next part of the story.
+   */
+  function displayStoryPart(text, image, audioUrl, choices) {
     const storyPart = document.createElement("div");
     storyPart.className = "story-part";
     storyPart.innerHTML = `
       <p>${text.replace(/\n/g, "<br><br>")}</p>
       <img src="${image}" alt="Story Image" style="width: 50%;" />
       <audio controls src="${audioUrl}"></audio>
+      ${choices.map((choice) => `<p>${choice}</p>`).join("")}
     `;
     storyContainer.appendChild(storyPart);
+
+    const newActionButton = createNewActionButton();
+    storyContainer.appendChild(newActionButton);
+    storyContainer.scrollTop = storyContainer.scrollHeight;
   }
 
+  /**
+   * Adds a user input part to the story.
+   * @param {string} text - The user input text to add.
+   * @param {boolean} isUserInput - Flag indicating if the text is user input.
+   */
   function addStoryPart(text, isUserInput) {
     const part = document.createElement("div");
     part.className = isUserInput ? "user-input" : "story-part";
@@ -110,22 +155,12 @@ document.addEventListener("DOMContentLoaded", () => {
     storyContainer.scrollTop = storyContainer.scrollHeight;
   }
 
-  function createNextButton() {
-    const nextButton = document.createElement("button");
-    nextButton.className = "main-action";
-    nextButton.innerText = "What happens next?";
-    nextButton.disabled = false;
-    nextButton.onclick = async () => {
-      if (nextButton.innerText === "What happens next?") {
-        startRecording(nextButton);
-      } else if (nextButton.innerText === "Finished") {
-        stopRecording(nextButton);
-      }
-    };
-    storyContainer.appendChild(nextButton);
-  }
-
-  async function fetchStoryContinuation(userInput) {
+  /**
+   * Fetches the continuation of the story based on user input.
+   * @param {string} userInput - The user input to base the story continuation on.
+   * @param {HTMLElement} button - The button element to update.
+   */
+  async function fetchStoryContinuation(userInput, button) {
     try {
       const response = await fetch("/continue-story", {
         method: "POST",
@@ -147,30 +182,28 @@ document.addEventListener("DOMContentLoaded", () => {
       }
 
       const result = await response.json();
-      displayStoryPart(result.story, result.image, result.audioUrl);
-      addChoices(result.choices);
+      displayStoryPart(
+        result.story,
+        result.image,
+        result.audioUrl,
+        result.choices
+      );
       previousStory += " " + result.story.trim();
       previousInputs.push(userInput);
       inputCount++;
-      document.querySelector(".main-action").style.display = "none"; // Hide the previous button
-      createNextButton(); // Create the next button at the bottom
     } catch (error) {
       console.error("Error continuing the story:", error);
+    } finally {
+      button.innerText = "What happens next?";
+      button.disabled = false;
     }
   }
 
-  function addChoices(choices) {
-    const choicesDiv = document.createElement("div");
-    choicesDiv.className = "choices";
-    choices.forEach((choice) => {
-      const choiceP = document.createElement("p");
-      choiceP.textContent = choice;
-      choicesDiv.appendChild(choiceP);
-    });
-    storyContainer.appendChild(choicesDiv);
-    storyContainer.scrollTop = storyContainer.scrollHeight;
-  }
-
+  /**
+   * Cleans user input by removing previously recorded inputs from it.
+   * @param {string} userInput - The user input to clean.
+   * @returns {string} - The cleaned user input.
+   */
   function cleanUserInput(userInput) {
     let cleanInput = userInput.trim();
 

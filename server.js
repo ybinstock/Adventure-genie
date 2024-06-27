@@ -40,7 +40,8 @@ if (!fs.existsSync(generatedDir)) {
 // Function to generate images
 async function generateImage(description, index) {
   console.log(`Generating image ${index + 1}...`);
-  const prompt = `An illustration in a consistent art style, with no text, no captions, no subtitles, high quality. ${description}`;
+  const prompt = `Create an illustration suitable for a children's story. The image should be in a consistent art style, with no text, no captions, no subtitles, no words, no letters, no numbers, and no symbols. Ensure the illustration is high quality. The image should be purely visual without any textual elements ${description}`;
+
   try {
     const response = await openai.images.generate({
       model: "dall-e-3",
@@ -97,7 +98,7 @@ const countTokens = (text) => {
 app.post("/generate-story", async (req, res) => {
   const { genre, childGender, theme, age, artStyle } = req.body;
 
-  const prompt = `Create the beginning of a bedtime story in the ${genre} genre, featuring a ${childGender} aged ${age} with a theme of ${theme}. Illustrate it in ${artStyle} style. End the segment with a prompt for choices.`;
+  const prompt = `Create a bedtime story in the ${genre} genre, featuring a ${childGender} aged ${age} with a theme of ${theme}. Illustrate it in ${artStyle} style.`;
 
   try {
     const response = await openai.chat.completions.create({
@@ -110,6 +111,7 @@ app.post("/generate-story", async (req, res) => {
     });
 
     const story = response.choices[0].message.content.trim();
+    const storyText = story.replace(/Illustration: \[.*?\]/g, ""); // Remove illustration descriptions from the story
 
     // Generate image for the story
     const image = await generateImage(story, 0);
@@ -118,7 +120,7 @@ app.post("/generate-story", async (req, res) => {
     const audioUrl = await generateVoiceover(story, 0);
 
     // Generate choices for the next part of the story
-    const choicesPrompt = `Based on the following story, generate three relevant choices for the next part of the story. Each choice must be 20 tokens or fewer:\n\n${story}`;
+    const choicesPrompt = `Based on the following story, generate three relevant choices for the next part of the story. Each choice must be 20 tokens or fewer:\n\n${storyText}`;
 
     const choicesResponse = await openai.chat.completions.create({
       model: "gpt-3.5-turbo",
@@ -139,10 +141,10 @@ app.post("/generate-story", async (req, res) => {
       .map((choice) => choice.replace(/^\d+\.\s*/, "").trim()) // Remove leading numbers and trim spaces
       .filter((choice) => countTokens(choice) <= 20) // Ensure each choice is 20 tokens or fewer
       .slice(0, 3) // Take only the first three choices
-      .map((choice, index) => `${index + 1}. ${choice}`); // Add leading numbers
+      .map((choice, index) => `Choice ${index + 1}: ${choice}`); // Add leading numbers
 
     // Return the story, image, audio URL, and choices
-    res.json({ story, image, audioUrl, choices });
+    res.json({ story: storyText, image, audioUrl, choices });
   } catch (error) {
     console.error("Error generating story:", error.message);
     res.status(500).json({ error: "Error generating story" });
@@ -195,6 +197,7 @@ app.post("/continue-story", async (req, res) => {
     });
 
     let storyText = response.choices[0].message.content;
+    storyText = storyText.replace(/Illustration: \[.*?\]/g, ""); // Remove illustration descriptions
 
     let choices = [];
     if (inputCount < 2) {
@@ -219,7 +222,7 @@ app.post("/continue-story", async (req, res) => {
         .map((choice) => choice.replace(/^\d+\.\s*/, "").trim()) // Remove leading numbers and trim spaces
         .filter((choice) => countTokens(choice) <= 20) // Ensure each choice is 20 tokens or fewer
         .slice(0, 3) // Take only the first three choices
-        .map((choice, index) => `${index + 1}. ${choice}`); // Add leading numbers
+        .map((choice, index) => `Choice ${index + 1}: ${choice}`); // Add leading numbers
     }
 
     // Generate image for the new story segment

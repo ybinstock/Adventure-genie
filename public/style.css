@@ -1,5 +1,5 @@
 body {
-  font-family: 'Comic Sans MS', sans-serif;
+  font-family: 'Comic Sans MS', 'Comic Sans', cursive;
   text-align: center;
   margin: 0;
   padding: 0;
@@ -44,19 +44,33 @@ button {
   padding: 10px 20px;
   font-size: 16px;
   cursor: pointer;
+}
+
+button#main-action {
   background-color: #4CAF50;
   color: white;
   border: none;
-  border-radius: 5px;
 }
 
-button:disabled {
-  background-color: #cccccc;
-  cursor: not-allowed;
+button#main-action:disabled {
+  background-color: #ddd;
+  color: #666;
 }
 
-#loading {
-  display: none;
+button#main-action.loading {
+  background-color: #FFC107;
+  color: white;
+}
+
+button.action-button {
+  background-color: #2196F3;
+  color: white;
+  border: none;
+}
+
+button.action-button:disabled {
+  background-color: #ddd;
+  color: #666;
 }
 
 .story-part {
