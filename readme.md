@@ -1,6 +1,8 @@
 # Interactive Storytelling App for Children
 
-![Interactive Storytelling](/screenshot.png)
+![Interactive Storytelling1](/screenshot1.png)
+![Interactive Storytelling2](/screenshot2.png)
+![Interactive Storytelling3](/screenshot3.png)
 
 A captivating and immersive interactive storytelling app for children, powered by the ChatGPT API. This app generates and narrates personalized stories, allowing children to dynamically influence the storyline through their choices. Whether using on-screen options or voice commands, kids can guide their own adventures, ensuring a unique experience every time.
 
